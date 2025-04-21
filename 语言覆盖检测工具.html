@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>语言覆盖检测工具</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      margin-top: 10px;
+      font-family: monospace;
+    }
+    .result {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h2>语言覆盖检测工具</h2>
+  <p>粘贴你从URL表格中复制的语言代码（如 en-us、es-es），每行一个或含在文本中均可。</p>
+  <textarea id="inputBox" placeholder="粘贴语言代码列表..."></textarea>
+  <button onclick="checkMissingLangs()">检查缺失语种</button>
+
+  <div class="result" id="resultBox"></div>
+
+  <script>
+    const requiredLangs = ['en', 'es', 'pt', 'ru', 'fr', 'de', 'tw', 'zh', 'ja', 'id', 'it', 'th', 'vi', 'tr', 'pl', 'nl', 'ko'];
+
+    function checkMissingLangs() {
+      const input = document.getElementById('inputBox').value.toLowerCase();
+      const matches = input.match(/[a-z]{2}(?:-[a-z]{2})?/g) || [];
+
+      const prefixes = matches
+        .filter(code => code !== 'x-default')
+        .map(code => code.split('-')[0]);
+
+      const requiredCount = countItems(requiredLangs);
+      const existingCount = countItems(prefixes);
+
+      const missing = [];
+      for (const lang in requiredCount) {
+        const missingCount = requiredCount[lang] - (existingCount[lang] || 0);
+        if (missingCount > 0) {
+          for (let i = 0; i < missingCount; i++) {
+            missing.push(lang);
+          }
+        }
+      }
+
+      const resultBox = document.getElementById('resultBox');
+      resultBox.innerText = missing.length
+        ? '缺失的语言代码：' + missing.join(', ')
+        : '🎉 已全部覆盖，无缺失语种！';
+    }
+
+    function countItems(arr) {
+      const map = {};
+      for (const item of arr) {
+        map[item] = (map[item] || 0) + 1;
+      }
+      return map;
+    }
+  </script>
+</body>
+</html>
