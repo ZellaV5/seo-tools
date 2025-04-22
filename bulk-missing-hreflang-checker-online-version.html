@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>批量 hreflang 缺失检查工具</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1000px;
+      margin: auto;
+      padding: 2em;
+    }
+    textarea {
+      width: 100%;
+      height: 150px;
+      font-family: monospace;
+      margin-bottom: 1em;
+    }
+    button {
+      padding: 0.5em 1.5em;
+      font-size: 16px;
+      margin-bottom: 1em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1em;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .loading {
+      color: green;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>批量 hreflang 缺失检查工具</h1>
+  <p>每行输入一个页面 URL：</p>
+  <textarea id="urls">https://www.fotor.com/features/unblur-image/</textarea>
+  <br>
+  <button onclick="startCheck()">开始检查</button>
+  <div id="status" class="loading"></div>
+  <div id="result"></div>
+
+  <script>
+    const targetLangs = ["en", "es", "pt", "ru", "fr", "de", "tw", "zh", "jp", "id", "it", "th", "vi", "tr", "pl", "nl", "ko"];
+    const langMap = {
+      "en-us": "en", "es-es": "es", "pt-br": "pt", "ru-ru": "ru",
+      "fr-fr": "fr", "de-de": "de", "zh-cn": "zh", "zh-tw": "tw",
+      "ja-jp": "jp", "id-id": "id", "it-it": "it", "th-th": "th",
+      "vi-vn": "vi", "tr-tr": "tr", "pl-pl": "pl", "nl-nl": "nl",
+      "ko": "ko"
+    };
+
+    function getMissingUrls(baseUrl, missingLangs) {
+      const urlObj = new URL(baseUrl);
+      const path = urlObj.pathname.replace(/^\/+/, ''); // remove leading /
+      return missingLangs.map(lang => {
+        let prefix = lang === 'en' || lang === 'zh' ? '' : `/${lang}`;
+        if (lang === 'zh') prefix = '/cn';
+        if (lang === 'tw') prefix = '/tw';
+        if (lang === 'jp') prefix = '/jp';
+        return `${urlObj.origin}${prefix}/${path}`;
+      });
+    }
+
+    async function checkOne(url) {
+      const proxy = "https://api.allorigins.win/raw?url=";
+      try {
+        const res = await fetch(proxy + encodeURIComponent(url));
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const links = doc.querySelectorAll('link[rel="alternate"]');
+
+        const found = new Set();
+        links.forEach(link => {
+          let hreflang = link.getAttribute('hreflang')?.toLowerCase();
+          if (!hreflang || hreflang === 'x-default') return;
+          const mapped = langMap[hreflang] || hreflang.split('-')[0];
+          found.add(mapped);
+        });
+
+        const missing = targetLangs.filter(l => !found.has(l));
+        const missingUrls = getMissingUrls(url, missing);
+
+        return {
+          url,
+          missingCount: missing.length,
+          missingLangs: missing.join(', '),
+          missingUrls: missingUrls.join('<br>')
+        };
+      } catch (e) {
+        return {
+          url,
+          missingCount: "抓取失败",
+          missingLangs: e.message,
+          missingUrls: ""
+        };
+      }
+    }
+
+    async function startCheck() {
+      const urls = document.getElementById("urls").value.trim().split("\n").filter(Boolean);
+      const status = document.getElementById("status");
+      const result = document.getElementById("result");
+
+      status.textContent = `共 ${urls.length} 个页面，正在检测...`;
+      result.innerHTML = "";
+
+      const results = [];
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i].trim();
+        status.textContent = `正在检查第 ${i + 1} 个 / ${urls.length}：${url}`;
+        const res = await checkOne(url);
+        results.push(res);
+      }
+
+      status.textContent = "✅ 全部检查完成";
+      let tableHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>URL</th>
+              <th>缺失数量</th>
+              <th>缺失语言</th>
+              <th>缺失语言 URL</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      results.forEach(r => {
+        tableHTML += `
+          <tr>
+            <td>${r.url}</td>
+            <td>${r.missingCount}</td>
+            <td>${r.missingLangs}</td>
+            <td>${r.missingUrls}</td>
+          </tr>`;
+      });
+      tableHTML += `</tbody></table>`;
+      result.innerHTML = tableHTML;
+    }
+  </script>
+</body>
+</html>
