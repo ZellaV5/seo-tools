@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>批量图像文字标注工具</title>
+  <style>
+    body { font-family: Arial; padding: 20px; text-align: center; }
+    #canvasWrapper { position: relative; display: inline-block; margin-top: 20px; }
+    canvas { border: 1px solid #999; }
+    textarea { width: 80%; height: 100px; font-size: 16px; padding: 10px; margin-top: 10px; }
+    button, input[type="file"] { margin-top: 10px; padding: 10px 20px; font-size: 16px; margin-right: 10px; }
+    #controls { margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <h2>📌 批量图像标注工具（文字 & 红框可拖动）</h2>
+
+  <textarea id="textList" placeholder="请输入每张图对应的文字（每行一条）"></textarea><br>
+  <input type="file" id="imageUpload" accept="image/*" multiple><br>
+
+  <div id="canvasWrapper">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div id="controls">
+    <button onclick="prevImage()">⬅ 上一张</button>
+    <button onclick="nextImage()">下一张 ➡</button>
+    <button onclick="downloadImage()">📥 下载当前图片</button>
+    <button onclick="downloadAll()">📤 依次下载所有图片</button>
+    <p id="imageIndexLabel"></p>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const textList = document.getElementById("textList");
+    const imageUpload = document.getElementById("imageUpload");
+    const imageIndexLabel = document.getElementById("imageIndexLabel");
+
+    let images = [];
+    let texts = [];
+    let positions = [];
+
+    let currentIndex = 0;
+    let dragTarget = null;
+    let offset = { x: 0, y: 0 };
+
+    imageUpload.addEventListener("change", function(e) {
+      const files = Array.from(e.target.files);
+      texts = textList.value.trim().split("\n");
+      images = [];
+      positions = [];
+
+      if (files.length === 0) return;
+
+      files.forEach((file, index) => {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const img = new Image();
+          img.onload = function() {
+            images[index] = img;
+
+            const rectWidth = 200;
+            const rectHeight = 150;
+
+            positions[index] = {
+              text: texts[index] || "",
+              textPos: { x: img.width / 2 - rectWidth / 4, y: img.height - rectHeight / 3 },
+              rectPos: {
+                x: img.width / 2 - rectWidth / 2,
+                y: img.height - rectHeight - 20,
+                width: rectWidth,
+                height: rectHeight
+              }
+            };
+            if (index === 0) draw();
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    function draw() {
+      const img = images[currentIndex];
+      if (!img) return;
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      const pos = positions[currentIndex];
+
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(pos.rectPos.x, pos.rectPos.y, pos.rectPos.width, pos.rectPos.height);
+
+      ctx.fillStyle = "red";
+      ctx.font = "20px sans-serif";
+      ctx.fillText(pos.text, pos.textPos.x, pos.textPos.y);
+
+      imageIndexLabel.textContent = `当前图片：${currentIndex + 1} / ${images.length}`;
+    }
+
+    canvas.addEventListener("mousedown", function(e) {
+      const mouseX = e.offsetX, mouseY = e.offsetY;
+      const pos = positions[currentIndex];
+
+      if (mouseX >= pos.textPos.x - 10 && mouseX <= pos.textPos.x + 300 &&
+          mouseY >= pos.textPos.y - 30 && mouseY <= pos.textPos.y + 10) {
+        dragTarget = "text";
+        offset.x = mouseX - pos.textPos.x;
+        offset.y = mouseY - pos.textPos.y;
+      } else if (mouseX >= pos.rectPos.x && mouseX <= pos.rectPos.x + pos.rectPos.width &&
+                 mouseY >= pos.rectPos.y && mouseY <= pos.rectPos.y + pos.rectPos.height) {
+        dragTarget = "rect";
+        offset.x = mouseX - pos.rectPos.x;
+        offset.y = mouseY - pos.rectPos.y;
+      }
+    });
+
+    canvas.addEventListener("mousemove", function(e) {
+      if (!dragTarget) return;
+      const mouseX = e.offsetX, mouseY = e.offsetY;
+      const pos = positions[currentIndex];
+
+      if (dragTarget === "text") {
+        pos.textPos.x = mouseX - offset.x;
+        pos.textPos.y = mouseY - offset.y;
+      } else if (dragTarget === "rect") {
+        pos.rectPos.x = mouseX - offset.x;
+        pos.rectPos.y = mouseY - offset.y;
+      }
+      draw();
+    });
+
+    canvas.addEventListener("mouseup", () => dragTarget = null);
+    canvas.addEventListener("mouseleave", () => dragTarget = null);
+
+    function nextImage() {
+      if (currentIndex < images.length - 1) {
+        currentIndex++;
+        draw();
+      }
+    }
+
+    function prevImage() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        draw();
+      }
+    }
+
+    function downloadImage(index = currentIndex) {
+      const img = images[index];
+      const pos = positions[index];
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      ctx.strokeStyle = "red";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(pos.rectPos.x, pos.rectPos.y, pos.rectPos.width, pos.rectPos.height);
+
+      ctx.fillStyle = "red";
+      ctx.font = "20px sans-serif";
+      ctx.fillText(pos.text, pos.textPos.x, pos.textPos.y);
+
+      const link = document.createElement('a');
+      link.download = `image-${index + 1}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+
+    function downloadAll() {
+      images.forEach((img, index) => {
+        setTimeout(() => {
+          downloadImage(index);
+        }, index * 500); // 每张间隔0.5秒，避免浏览器阻止自动下载
+      });
+    }
+  </script>
+</body>
+</html>
