@@ -6,7 +6,7 @@
   <style>
     body { font-family: Arial; padding: 20px; text-align: center; }
     #canvasWrapper { position: relative; display: inline-block; margin-top: 20px; }
-    canvas { border: 1px solid #999; }
+    canvas { border: 1px solid #999; cursor: crosshair; }
     textarea { width: 80%; height: 100px; font-size: 16px; padding: 10px; margin-top: 10px; }
     button, input[type="file"] { margin-top: 10px; padding: 10px 20px; font-size: 16px; margin-right: 10px; }
     #controls { margin-top: 20px; }
@@ -14,7 +14,7 @@
 </head>
 <body>
 
-  <h2>📌 批量图像标注工具（文字 & 红框可拖动）</h2>
+  <h2>📌 批量图像标注工具（文字 & 红框可拖动缩放）</h2>
 
   <textarea id="textList" placeholder="请输入每张图对应的文字（每行一条）"></textarea><br>
   <input type="file" id="imageUpload" accept="image/*" multiple><br>
@@ -27,7 +27,7 @@
     <button onclick="prevImage()">⬅ 上一张</button>
     <button onclick="nextImage()">下一张 ➡</button>
     <button onclick="downloadImage()">📥 下载当前图片</button>
-    <button onclick="downloadAll()">📤 依次下载所有图片</button>
+    <button onclick="downloadAll()">📦 批量下载所有图片</button>
     <p id="imageIndexLabel"></p>
   </div>
 
@@ -61,10 +61,7 @@
           const img = new Image();
           img.onload = function() {
             images[index] = img;
-
-            const rectWidth = 200;
-            const rectHeight = 150;
-
+            const rectWidth = 350, rectHeight = 150;
             positions[index] = {
               text: texts[index] || "",
               textPos: { x: img.width / 2 - rectWidth / 4, y: img.height - rectHeight / 3 },
@@ -83,8 +80,8 @@
       });
     });
 
-    function draw() {
-      const img = images[currentIndex];
+    function draw(index = currentIndex) {
+      const img = images[index];
       if (!img) return;
 
       canvas.width = img.width;
@@ -92,8 +89,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
 
-      const pos = positions[currentIndex];
-
+      const pos = positions[index];
       ctx.strokeStyle = "red";
       ctx.lineWidth = 4;
       ctx.strokeRect(pos.rectPos.x, pos.rectPos.y, pos.rectPos.width, pos.rectPos.height);
@@ -102,23 +98,34 @@
       ctx.font = "20px sans-serif";
       ctx.fillText(pos.text, pos.textPos.x, pos.textPos.y);
 
-      imageIndexLabel.textContent = `当前图片：${currentIndex + 1} / ${images.length}`;
+      if (index === currentIndex) {
+        imageIndexLabel.textContent = `当前图片：${index + 1} / ${images.length}`;
+      }
     }
 
     canvas.addEventListener("mousedown", function(e) {
       const mouseX = e.offsetX, mouseY = e.offsetY;
       const pos = positions[currentIndex];
+      const rx = pos.rectPos.x, ry = pos.rectPos.y;
+      const rw = pos.rectPos.width, rh = pos.rectPos.height;
+
+      if (mouseX > rx + rw - 10 && mouseX < rx + rw + 10 && mouseY > ry + rh - 10 && mouseY < ry + rh + 10) {
+        dragTarget = "resize";
+        offset.x = mouseX - (rx + rw);
+        offset.y = mouseY - (ry + rh);
+        return;
+      }
 
       if (mouseX >= pos.textPos.x - 10 && mouseX <= pos.textPos.x + 300 &&
           mouseY >= pos.textPos.y - 30 && mouseY <= pos.textPos.y + 10) {
         dragTarget = "text";
         offset.x = mouseX - pos.textPos.x;
         offset.y = mouseY - pos.textPos.y;
-      } else if (mouseX >= pos.rectPos.x && mouseX <= pos.rectPos.x + pos.rectPos.width &&
-                 mouseY >= pos.rectPos.y && mouseY <= pos.rectPos.y + pos.rectPos.height) {
+      } else if (mouseX >= rx && mouseX <= rx + rw &&
+                 mouseY >= ry && mouseY <= ry + rh) {
         dragTarget = "rect";
-        offset.x = mouseX - pos.rectPos.x;
-        offset.y = mouseY - pos.rectPos.y;
+        offset.x = mouseX - rx;
+        offset.y = mouseY - ry;
       }
     });
 
@@ -133,7 +140,11 @@
       } else if (dragTarget === "rect") {
         pos.rectPos.x = mouseX - offset.x;
         pos.rectPos.y = mouseY - offset.y;
+      } else if (dragTarget === "resize") {
+        pos.rectPos.width = mouseX - pos.rectPos.x;
+        pos.rectPos.height = mouseY - pos.rectPos.y;
       }
+
       draw();
     });
 
@@ -155,34 +166,28 @@
     }
 
     function downloadImage(index = currentIndex) {
-      const img = images[index];
-      const pos = positions[index];
-
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-
-      ctx.strokeStyle = "red";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(pos.rectPos.x, pos.rectPos.y, pos.rectPos.width, pos.rectPos.height);
-
-      ctx.fillStyle = "red";
-      ctx.font = "20px sans-serif";
-      ctx.fillText(pos.text, pos.textPos.x, pos.textPos.y);
+      draw(index); // 确保画的是当前图层
 
       const link = document.createElement('a');
       link.download = `image-${index + 1}.png`;
-      link.href = canvas.toDataURL();
+      link.href = canvas.toDataURL("image/png");
       link.click();
     }
 
     function downloadAll() {
-      images.forEach((img, index) => {
+      let delay = 0;
+      for (let i = 0; i < images.length; i++) {
         setTimeout(() => {
-          downloadImage(index);
-        }, index * 500); // 每张间隔0.5秒，避免浏览器阻止自动下载
-      });
+          draw(i);
+          const link = document.createElement('a');
+          link.download = `image-${i + 1}.png`;
+          link.href = canvas.toDataURL("image/png");
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }, delay);
+        delay += 300; // 300ms 间隔，避免浏览器拦截下载
+      }
     }
   </script>
 </body>
