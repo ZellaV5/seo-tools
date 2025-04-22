@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>批量 URL 访问工具</title>
+</head>
+<body>
+  <h2>批量URL缓存清理工具</h2>
+  <textarea id="userUrls" placeholder="请输入多个 URL，每行一个" rows="10" style="width: 600px;"></textarea><br>
+  <button onclick="runBatchTask()">执行任务</button>
+
+  <div id="output" style="margin-top: 20px;"></div>
+
+  <script>
+    function runBatchTask() {
+      const inputText = document.getElementById('userUrls').value.trim();
+      if (!inputText) {
+        alert('请输入至少一个 URL');
+        return;
+      }
+
+      const urls = inputText.split('\n').map(url => url.trim()).filter(Boolean);
+      let cdnList = [];
+
+      for (const input of urls) {
+        if (!input.startsWith('http')) {
+          alert(`URL 格式错误：${input}`);
+          continue;
+        }
+
+        try {
+          const urlObj = new URL(input);
+          let path = urlObj.pathname;
+          if (!path.endsWith('/')) path += '/';
+
+          const firstVisit = `https://marketing-site-next-643-pro-aws-oregon.everimaging.cn/_cache?url=${path}`;
+          window.open(firstVisit, '_blank');
+
+          let cdnUrl = input.endsWith('/') ? input.slice(0, -1) + '*' : input + '*';
+          cdnList.push(cdnUrl);
+
+        } catch (e) {
+          alert(`URL 解析失败：${input}`);
+        }
+      }
+
+      // 展示所有 CDN 提交地址
+      const outputHtml = `
+        <p>👉 第二步请前往 <a href="http://cdn.everimaging.cn/cdn/" target="_blank">CDN 提交页面</a>，手动提交以下地址（带 *）：</p>
+        <ul>${cdnList.map(url => `<li><code>${url}</code></li>`).join('')}</ul>
+      `;
+      document.getElementById('output').innerHTML = outputHtml;
+    }
+  </script>
+</body>
+</html>
