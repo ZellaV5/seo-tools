@@ -20,6 +20,7 @@
       padding: 0.5em 1.5em;
       font-size: 16px;
       margin-bottom: 1em;
+      margin-right: 1em;
     }
     table {
       width: 100%;
@@ -47,8 +48,21 @@
   <textarea id="urls">https://www.fotor.com/features/unblur-image/</textarea>
   <br>
   <button onclick="startCheck()">开始检查</button>
+  <button onclick="downloadCSV()">下载为 CSV</button>
   <div id="status" class="loading"></div>
-  <div id="result"></div>
+  <div id="result">
+    <table id="resultTable">
+      <thead>
+        <tr>
+          <th>URL</th>
+          <th>缺失数量</th>
+          <th>缺失语言</th>
+          <th>缺失语言 URL</th>
+        </tr>
+      </thead>
+      <tbody id="resultBody"></tbody>
+    </table>
+  </div>
 
   <script>
     const targetLangs = ["en", "es", "pt", "ru", "fr", "de", "tw", "zh", "jp", "id", "it", "th", "vi", "tr", "pl", "nl", "ko"];
@@ -60,9 +74,12 @@
       "ko": "ko"
     };
 
+    let allResults = [];
+
     function getMissingUrls(baseUrl, missingLangs) {
       const urlObj = new URL(baseUrl);
       const path = urlObj.pathname.replace(/^\/+/, ''); // remove leading /
+
       return missingLangs.map(lang => {
         let prefix = lang === 'en' || lang === 'zh' ? '' : `/${lang}`;
         if (lang === 'zh') prefix = '/cn';
@@ -95,14 +112,14 @@
           url,
           missingCount: missing.length,
           missingLangs: missing.join(', '),
-          missingUrls: missingUrls.join('<br>')
+          missingUrls
         };
       } catch (e) {
         return {
           url,
           missingCount: "抓取失败",
           missingLangs: e.message,
-          missingUrls: ""
+          missingUrls: []
         };
       }
     }
@@ -110,43 +127,79 @@
     async function startCheck() {
       const urls = document.getElementById("urls").value.trim().split("\n").filter(Boolean);
       const status = document.getElementById("status");
-      const result = document.getElementById("result");
+      const resultBody = document.getElementById("resultBody");
 
       status.textContent = `共 ${urls.length} 个页面，正在检测...`;
-      result.innerHTML = "";
+      resultBody.innerHTML = "";
+      allResults = [];
 
-      const results = [];
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i].trim();
         status.textContent = `正在检查第 ${i + 1} 个 / ${urls.length}：${url}`;
         const res = await checkOne(url);
-        results.push(res);
+        allResults.push(res);
+
+        if (res.missingUrls.length > 0) {
+          res.missingUrls.forEach(mUrl => {
+            const row = `<tr>
+              <td>${res.url}</td>
+              <td>${res.missingCount}</td>
+              <td>${res.missingLangs}</td>
+              <td>${mUrl}</td>
+            </tr>`;
+            resultBody.insertAdjacentHTML("beforeend", row);
+          });
+        } else {
+          const row = `<tr>
+            <td>${res.url}</td>
+            <td>${res.missingCount}</td>
+            <td>${res.missingLangs}</td>
+            <td></td>
+          </tr>`;
+          resultBody.insertAdjacentHTML("beforeend", row);
+        }
       }
 
       status.textContent = "✅ 全部检查完成";
-      let tableHTML = `
-        <table>
-          <thead>
-            <tr>
-              <th>URL</th>
-              <th>缺失数量</th>
-              <th>缺失语言</th>
-              <th>缺失语言 URL</th>
-            </tr>
-          </thead>
-          <tbody>
-      `;
-      results.forEach(r => {
-        tableHTML += `
-          <tr>
-            <td>${r.url}</td>
-            <td>${r.missingCount}</td>
-            <td>${r.missingLangs}</td>
-            <td>${r.missingUrls}</td>
-          </tr>`;
+    }
+
+    function downloadCSV() {
+      if (allResults.length === 0) {
+        alert("请先进行检测");
+        return;
+      }
+
+      const csvRows = [
+        ["URL", "缺失数量", "缺失语言", "缺失语言 URL"]
+      ];
+
+      allResults.forEach(r => {
+        const missingUrls = r.missingUrls;
+        if (missingUrls.length > 0) {
+          missingUrls.forEach(missingUrl => {
+            csvRows.push([
+              `"${r.url}"`,
+              `"${r.missingCount}"`,
+              `"${r.missingLangs}"`,
+              `"${missingUrl}"`
+            ]);
+          });
+        } else {
+          csvRows.push([
+            `"${r.url}"`,
+            `"${r.missingCount}"`,
+            `"${r.missingLangs}"`,
+            `""`
+          ]);
+        }
       });
-      tableHTML += `</tbody></table>`;
-      result.innerHTML = tableHTML;
+
+      const csvContent = csvRows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "hreflang-missing-report.csv";
+      link.click();
     }
   </script>
 </body>
