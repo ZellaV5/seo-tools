@@ -30,11 +30,32 @@
 
         try {
           const urlObj = new URL(input);
-          let path = urlObj.pathname;
-          if (!path.endsWith('/')) path += '/';
+          const pathParts = urlObj.pathname.split('/').filter(p => p);
+          let newPath = '';
 
-          const firstVisit = `https://marketing-site-next-643-pro-aws-oregon.everimaging.cn/_cache?url=${path}`;
-          window.open(firstVisit, '_blank');
+          if (pathParts[0] === 'features') {
+            if (pathParts.length > 2) {
+              // 情况 3：features + 多级路径，合并为 slug
+              const slug = pathParts.slice(1).join('-');
+              newPath = '/features/' + slug + '/';
+            } else {
+              // 已有 features 且为一级或两级，不变
+              newPath = urlObj.pathname;
+              if (!newPath.endsWith('/')) newPath += '/';
+            }
+          } else {
+            if (pathParts.length === 1) {
+              // 情况 1：不含 features 且一级路径，加 features
+              newPath = '/features/' + pathParts[0] + '/';
+            } else if (pathParts.length >= 2) {
+              // 情况 2：不含 features 且多级路径，合并为 slug
+              const slug = pathParts.join('-');
+              newPath = '/features/' + slug + '/';
+            }
+          }
+
+          const cacheUrl = `https://marketing-site-next-643-pro-aws-oregon.everimaging.cn/_cache?url=${newPath}`;
+          window.open(cacheUrl, '_blank');
 
           let cdnUrl = input.endsWith('/') ? input.slice(0, -1) + '*' : input + '*';
           cdnList.push(cdnUrl);
