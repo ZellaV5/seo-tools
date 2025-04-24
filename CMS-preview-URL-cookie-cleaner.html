@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>批量 URL 访问工具</title>
+</head>
+<body>
+  <h2>批量URL缓存清理工具</h2>
+
+  <textarea id="userUrls" placeholder="请输入多个 URL，每行一个" rows="10" style="width: 600px;"></textarea><br><br>
+
+  <fieldset style="width: 600px;">
+    <legend>可选语言（可多选）</legend>
+    <div style="display: flex; flex-direction: column;">
+      <label><input type="checkbox" value="en"> 英语 - EN</label>
+      <label><input type="checkbox" value="es"> 西语 - ES</label>
+      <label><input type="checkbox" value="pt"> 葡语 - PT</label>
+      <label><input type="checkbox" value="ru"> 俄语 - RU</label>
+      <label><input type="checkbox" value="fr"> 法语 - FR</label>
+      <label><input type="checkbox" value="de"> 德语 - DE</label>
+      <label><input type="checkbox" value="tw"> 繁中 - TW</label>
+      <label><input type="checkbox" value="zh"> 简中 - CN</label>
+      <label><input type="checkbox" value="jp"> 日语 - JP</label>
+      <label><input type="checkbox" value="id"> 印尼语 - ID</label>
+      <label><input type="checkbox" value="it"> 意大利语 - IT</label>
+      <label><input type="checkbox" value="th"> 泰语 - TH</label>
+      <label><input type="checkbox" value="vi"> 越南语 - VI</label>
+      <label><input type="checkbox" value="tr"> 土耳其语 - TR</label>
+      <label><input type="checkbox" value="pl"> 波兰语 - PL</label>
+      <label><input type="checkbox" value="nl"> 荷兰语 - NL</label>
+      <label><input type="checkbox" value="ko"> 韩语 - KO</label>
+    </div>
+  </fieldset><br>
+
+  <button onclick="runBatchTask()">第一步：访问缓存URL</button><br><br>
+
+  <hr>
+
+  <h3>第二步：生成 CDN 提交地址</h3>
+  <input id="cdnBaseUrl" placeholder="请输入 URL" style="width: 600px;" />
+  <button onclick="generateCdnUrls()">生成 CDN 地址</button>
+
+  <div id="cdnOutput" style="margin-top: 10px;"></div>
+
+  <script>
+    function getSelectedLangs() {
+      const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+      return Array.from(checkboxes).map(cb => cb.value);
+    }
+
+    function runBatchTask() {
+      const inputText = document.getElementById('userUrls').value.trim();
+      const selectedLangs = getSelectedLangs();
+
+      if (!inputText) {
+        alert('请输入至少一个 URL');
+        return;
+      }
+
+      const urls = inputText.split('\n').map(url => url.trim()).filter(Boolean);
+
+      for (const input of urls) {
+        if (!input.startsWith('http')) {
+          alert(`URL 格式错误：${input}`);
+          continue;
+        }
+
+        try {
+          const urlObj = new URL(input);
+          const host = 'https://marketing-site-next-643-pro-aws-oregon.everimaging.cn/_cache?url=';
+          let pathname = urlObj.pathname;
+          if (!pathname.endsWith('/')) pathname += '/';
+
+          const fullUrl = `${host}${pathname}`;
+          window.open(fullUrl, '_blank');
+
+          // 打开语言版本
+          for (const lang of selectedLangs) {
+            const langCode = lang === 'zh' ? 'cn' : lang;
+            const langUrl = `${host}/${langCode}${pathname}`;
+            window.open(langUrl, '_blank');
+          }
+
+        } catch (e) {
+          alert(`URL 解析失败：${input}`);
+        }
+      }
+    }
+
+    function generateCdnUrls() {
+      const input = document.getElementById('cdnBaseUrl').value.trim();
+      const selectedLangs = getSelectedLangs();
+
+      if (!input || !input.startsWith('http')) {
+        alert('请输入有效的 URL');
+        return;
+      }
+
+      try {
+        const urlObj = new URL(input);
+        const origin = urlObj.origin;
+        let basePath = urlObj.pathname;
+        if (basePath.endsWith('/')) {
+          basePath = basePath.slice(0, -1);
+        }
+
+        let resultUrls = [];
+        let baseUrlWithAsterisk = `${origin}${basePath}*`;
+        resultUrls.push(`<li><code>${baseUrlWithAsterisk}</code></li>`); // 用户提交的 URL 改写版放在第一排
+
+        if (selectedLangs.length === 0) {
+          resultUrls.push(`<li><code>${baseUrlWithAsterisk}</code></li>`);
+        } else {
+          for (const lang of selectedLangs) {
+            const langCode = lang === 'zh' ? 'cn' : lang;
+            const langUrl = `${origin}/${langCode}${basePath}*`;
+            resultUrls.push(`<li><code>${langUrl}</code></li>`);
+          }
+        }
+
+        const outputHtml = `
+          <p>👉 <a href="http://cdn.everimaging.cn/cdn/" target="_blank">CDN提交地址</a></p>
+          <p>👇 以下是改写后的 CDN 提交地址，点击复制：</p>
+          <ul>${resultUrls.join('')}</ul>
+        `;
+        document.getElementById('cdnOutput').innerHTML = outputHtml;
+
+      } catch (e) {
+        alert('URL 解析失败');
+      }
+    }
+  </script>
+</body>
+</html>
